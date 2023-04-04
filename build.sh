@@ -3,7 +3,9 @@
 set -e
 set -u
 
-declare -r toolchain_tarball="$(pwd)/haiku-cross.tar.xz"
+declare -r revision="$(git rev-parse --short HEAD)"
+
+declare -r toolchain_tarball="${PWD}/haiku-cross.tar.xz"
 
 declare -r gmp_tarball='/tmp/gmp.tar.xz'
 declare -r gmp_directory='/tmp/gmp-6.2.1'
@@ -15,7 +17,7 @@ declare -r mpc_tarball='/tmp/mpc.tar.gz'
 declare -r mpc_directory='/tmp/mpc-1.3.0'
 
 declare -r binutils_tarball='/tmp/binutils.tar.xz'
-declare -r binutils_directory='/tmp/binutils-2.39'
+declare -r binutils_directory='/tmp/binutils-2.40'
 
 declare -r gcc_tarball='/tmp/gcc.tar.xz'
 declare -r gcc_directory='/tmp/gcc-11.2.0'
@@ -27,7 +29,7 @@ declare -r jam='/tmp/jam'
 
 declare -r triple='x86_64-unknown-haiku'
 
-declare -r cflags='-Wno-unused-command-line-argument -Os -s -DNDEBUG'
+declare -r cflags='-Os -s -DNDEBUG'
 
 declare -r toolchain_directory="/tmp/unknown-unknown-haiku"
 
@@ -40,7 +42,7 @@ tar --directory="$(dirname "${mpfr_directory}")" --extract --file="${mpfr_tarbal
 wget --no-verbose 'https://ftp.gnu.org/gnu/mpc/mpc-1.3.0.tar.gz' --output-document="${mpc_tarball}"
 tar --directory="$(dirname "${mpc_directory}")" --extract --file="${mpc_tarball}"
 
-wget --no-verbose 'https://ftp.gnu.org/gnu/binutils/binutils-2.39.tar.xz' --output-document="${binutils_tarball}"
+wget --no-verbose 'https://ftp.gnu.org/gnu/binutils/binutils-2.40.tar.xz' --output-document="${binutils_tarball}"
 tar --directory="$(dirname "${binutils_directory}")" --extract --file="${binutils_tarball}"
 
 wget --no-verbose 'https://ftp.gnu.org/gnu/gcc/gcc-11.2.0/gcc-11.2.0.tar.xz' --output-document="${gcc_tarball}"
@@ -159,7 +161,7 @@ declare -r cinclude_flags="-I${toolchain_directory}/${triple}/boot/system/non-pa
 	--with-mpc="${toolchain_directory}" \
 	--with-mpfr="${toolchain_directory}" \
 	--with-system-zlib \
-	--with-bugurl='https://github.com/AmanoTeam/Haiku-Cross/issues' \
+	--with-bugurl='https://github.com/AmanoTeam/h4ikucr0ss/issues' \
 	--enable-__cxa_atexit \
 	--enable-cet='auto' \
 	--enable-checking='release' \
@@ -187,6 +189,9 @@ declare -r cinclude_flags="-I${toolchain_directory}/${triple}/boot/system/non-pa
 	--enable-ld \
 	--enable-gold \
 	--enable-frame-pointer \
+	--with-pic \
+	--with-gcc-major-version-only \
+	--with-pkgversion="h4ikucr0ss v0.1-${revision}" \
 	--with-sysroot="${toolchain_directory}/${triple}" \
 	--with-default-libstdcxx-abi='gcc4-compatible'
 
