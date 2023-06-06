@@ -24,6 +24,8 @@ declare -r linkflags='-Wl,-s'
 
 declare -r max_jobs="$(($(nproc) * 8))"
 
+declare -r cpwd="${PWD}"
+
 if ! [ -f "${gmp_tarball}" ]; then
 	wget --no-verbose 'https://ftp.gnu.org/gnu/gmp/gmp-6.2.1.tar.xz' --output-document="${gmp_tarball}"
 	tar --directory="$(dirname "${gmp_directory}")" --extract --file="${gmp_tarball}"
@@ -284,4 +286,4 @@ while read name; do
 	strip --discard-all "${name}"
 done <<< "$(find "${toolchain_directory}" -type 'f')"
 
-tar --directory="$(dirname "${toolchain_directory}")" --create --file=- "$(basename "${toolchain_directory}")" |  xz --threads=0 --compress -9 > "./haiku-cross.tar.xz"
+tar --directory="$(dirname "${toolchain_directory}")" --create --file=- "$(basename "${toolchain_directory}")" |  xz --threads=0 --compress -9 > "${cpwd}/haiku-cross.tar.xz"
