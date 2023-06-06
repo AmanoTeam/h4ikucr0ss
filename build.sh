@@ -24,7 +24,7 @@ declare -r linkflags='-Wl,-s'
 
 declare -r max_jobs="$(($(nproc) * 8))"
 
-declare -r cpwd="${PWD}"
+source "./submodules/obggcc/toolchains/${1}.sh"
 
 if ! [ -f "${gmp_tarball}" ]; then
 	wget --no-verbose 'https://ftp.gnu.org/gnu/gmp/gmp-6.2.1.tar.xz' --output-document="${gmp_tarball}"
@@ -69,6 +69,7 @@ cd "${gmp_directory}/build"
 rm --force --recursive ./*
 
 ../configure \
+	--host="${CROSS_COMPILE_TRIPLET}" \
 	--prefix="${toolchain_directory}" \
 	--enable-shared \
 	--enable-static \
@@ -76,7 +77,7 @@ rm --force --recursive ./*
 	CXXFLAGS="${optflags}" \
 	LDFLAGS="${linkflags}"
 
-make all --jobs="${max_jobs}"
+make all --jobs
 make install
 
 [ -d "${mpfr_directory}/build" ] || mkdir "${mpfr_directory}/build"
@@ -85,6 +86,7 @@ cd "${mpfr_directory}/build"
 rm --force --recursive ./*
 
 ../configure \
+	--host="${CROSS_COMPILE_TRIPLET}" \
 	--prefix="${toolchain_directory}" \
 	--with-gmp="${toolchain_directory}" \
 	--enable-shared \
@@ -93,7 +95,7 @@ rm --force --recursive ./*
 	CXXFLAGS="${optflags}" \
 	LDFLAGS="${linkflags}"
 
-make all --jobs="${max_jobs}"
+make all --jobs
 make install
 
 [ -d "${mpc_directory}/build" ] || mkdir "${mpc_directory}/build"
@@ -102,6 +104,7 @@ cd "${mpc_directory}/build"
 rm --force --recursive ./*
 
 ../configure \
+	--host="${CROSS_COMPILE_TRIPLET}" \
 	--prefix="${toolchain_directory}" \
 	--with-gmp="${toolchain_directory}" \
 	--enable-shared \
@@ -110,7 +113,7 @@ rm --force --recursive ./*
 	CXXFLAGS="${optflags}" \
 	LDFLAGS="${linkflags}"
 
-make all --jobs="${max_jobs}"
+make all --jobs
 make install
 
 sed -i 's/#include <stdint.h>/#include <stdint.h>\n#include <stdio.h>/g' "${toolchain_directory}/include/mpc.h"
@@ -141,6 +144,7 @@ for target in "${targets[@]}"; do
 	rm --force --recursive ./*
 	
 	../configure \
+		--host="${CROSS_COMPILE_TRIPLET}" \
 		--target="${triple}" \
 		--prefix="${toolchain_directory}" \
 		--enable-gold \
@@ -148,7 +152,6 @@ for target in "${targets[@]}"; do
 		--enable-lto \
 		--disable-gprofng \
 		--with-static-standard-libraries \
-		--program-prefix="${triple}-" \
 		CFLAGS="${optflags}" \
 		CXXFLAGS="${optflags}" \
 		LDFLAGS="${linkflags}"
@@ -217,6 +220,7 @@ for target in "${targets[@]}"; do
 	rm --force --recursive ./*
 	
 	../configure \
+		--host="${CROSS_COMPILE_TRIPLET}" \
 		--target="${triple}" \
 		--prefix="${toolchain_directory}" \
 		--with-linker-hash-style='sysv' \
@@ -249,7 +253,7 @@ for target in "${targets[@]}"; do
 		--enable-ld \
 		--enable-gold \
 		--with-gcc-major-version-only \
-		--with-pkgversion="Sil v0.2-${revision}" \
+		--with-pkgversion="Sil v0.3-${revision}" \
 		--with-sysroot="${toolchain_directory}/${triple}" \
 		--with-native-system-header-dir='/include' \
 		--disable-nls \
@@ -258,7 +262,7 @@ for target in "${targets[@]}"; do
 		--with-boot-ldflags='-Wl,-rpath,$ORIGIN/../../../../lib' \
 		CFLAGS="${optflags}" \
 		CXXFLAGS="${optflags}" \
-		LDFLAGS=""
+		LDFLAGS="-Wl,-rpath-link,${OBGGCC_TOOLCHAIN}/${CROSS_COMPILE_TRIPLET}/lib"
 	
 	LD_LIBRARY_PATH="${toolchain_directory}/lib" PATH="${PATH}:${toolchain_directory}/bin" make \
 		CFLAGS_FOR_TARGET="${optflags} ${linkflags} ${cinclude_flags}" \
@@ -275,15 +279,3 @@ for target in "${targets[@]}"; do
 	
 	rm --recursive "${toolchain_directory}/share"
 done
-
-while read name; do
-	declare mime_type="$(file --brief --mime-type "${name}")"
-	
-	if ! ( [ "${mime_type}" == 'application/x-executable' ] || [ "${mime_type}" == 'application/x-sharedlib' ] ); then
-		continue
-	fi
-
-	strip --discard-all "${name}"
-done <<< "$(find "${toolchain_directory}" -type 'f')"
-
-tar --directory="$(dirname "${toolchain_directory}")" --create --file=- "$(basename "${toolchain_directory}")" |  xz --threads=0 --compress -9 > "${cpwd}/haiku-cross.tar.xz"
