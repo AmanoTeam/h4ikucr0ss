@@ -54,7 +54,10 @@ fi
 patch --input="$(realpath './patches/gcc-11.2.0.patch')" --strip=1 --directory="${gcc_directory}"
 patch --input="$(realpath './patches/no_hardcoded_paths.patch')" --strip=1 --directory="${gcc_directory}"
 
-sed -i 's/#ifdef _GLIBCXX_HAVE_SYS_SDT_H/#ifdef _GLIBCXX_HAVE_SYS_SDT_HHH/g' "${gcc_directory}/libstdc++-v3/libsupc++/unwind-cxx.h"
+# https://gcc.gnu.org/bugzilla/show_bug.cgi?id=51720
+sed --in-place 's/$(TARGET-stage1-gcc)/$(TARGET-stage1-gcc) LDFLAGS="$(STAGE1_LDFLAGS)"/' "${gcc_directory}/Makefile.in"
+
+sed --in-place 's/#ifdef _GLIBCXX_HAVE_SYS_SDT_H/#ifdef _GLIBCXX_HAVE_SYS_SDT_HHH/g' "${gcc_directory}/libstdc++-v3/libsupc++/unwind-cxx.h"
 
 [ -d "${gcc_directory}/build" ] || mkdir "${gcc_directory}/build"
 
@@ -252,6 +255,7 @@ for target in "${targets[@]}"; do
 		--disable-nls \
 		--with-default-libstdcxx-abi='gcc4-compatible' \
 		--enable-frame-pointer \
+		--with-boot-ldflags='-Wl,-rpath,$ORIGIN/../../../../lib' \
 		CFLAGS="${optflags}" \
 		CXXFLAGS="${optflags}" \
 		LDFLAGS=""
@@ -270,10 +274,6 @@ for target in "${targets[@]}"; do
 	done
 	
 	rm --recursive "${toolchain_directory}/share"
-	
-	patchelf --add-rpath '$ORIGIN/../../../../lib' "${toolchain_directory}/libexec/gcc/${triple}/11/cc1"
-	patchelf --add-rpath '$ORIGIN/../../../../lib' "${toolchain_directory}/libexec/gcc/${triple}/11/cc1plus"
-	patchelf --add-rpath '$ORIGIN/../../../../lib' "${toolchain_directory}/libexec/gcc/${triple}/11/lto1"
 done
 
 while read name; do
