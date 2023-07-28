@@ -17,14 +17,34 @@ declare -r binutils_tarball='/tmp/binutils.tar.xz'
 declare -r binutils_directory='/tmp/binutils-2.40'
 
 declare -r gcc_tarball='/tmp/gcc.tar.xz'
-declare -r gcc_directory='/tmp/gcc-11.2.0'
+declare -r gcc_directory='/tmp/gcc-13.1.0'
 
-declare -r optflags='-Os'
+declare -r cflags='-Wno-builtin-declaration-mismatch -Wno-strict-prototypes -Os'
 declare -r linkflags='-Wl,-s'
 
 declare -r max_jobs="$(($(nproc) * 8))"
 
-source "./submodules/obggcc/toolchains/${1}.sh"
+declare build_type="${1}"
+
+if [ -z "${build_type}" ]; then
+	build_type='native'
+fi
+
+declare is_native='0'
+
+if [ "${build_type}" == 'native' ]; then
+	is_native='1'
+fi
+
+declare OBGGCC_TOOLCHAIN='/tmp/obggcc-toolchain'
+declare CROSS_COMPILE_TRIPLET=''
+
+declare cross_compile_flags=''
+
+if ! (( is_native )); then
+	source "./submodules/obggcc/toolchains/${build_type}.sh"
+	cross_compile_flags+="--host=${CROSS_COMPILE_TRIPLET}"
+fi
 
 if ! [ -f "${gmp_tarball}" ]; then
 	wget --no-verbose 'https://ftp.gnu.org/gnu/gmp/gmp-6.2.1.tar.xz' --output-document="${gmp_tarball}"
@@ -47,11 +67,11 @@ if ! [ -f "${binutils_tarball}" ]; then
 fi
 
 if ! [ -f "${gcc_tarball}" ]; then
-	wget --no-verbose 'https://ftp.gnu.org/gnu/gcc/gcc-11.2.0/gcc-11.2.0.tar.xz' --output-document="${gcc_tarball}"
+	wget --no-verbose 'https://ftp.gnu.org/gnu/gcc/gcc-13.1.0/gcc-13.1.0.tar.xz' --output-document="${gcc_tarball}"
 	tar --directory="$(dirname "${gcc_directory}")" --extract --file="${gcc_tarball}"
 fi
 
-patch --input="$(realpath './patches/gcc-11.2.0.patch')" --strip=1 --directory="${gcc_directory}"
+patch --input="$(realpath './patches/gcc-13.1.0.patch')" --strip=1 --directory="${gcc_directory}"
 patch --input="$(realpath './patches/no_hardcoded_paths.patch')" --strip=1 --directory="${gcc_directory}"
 
 sed -i 's/#ifdef _GLIBCXX_HAVE_SYS_SDT_H/#ifdef _GLIBCXX_HAVE_SYS_SDT_HHH/g' "${gcc_directory}/libstdc++-v3/libsupc++/unwind-cxx.h"
@@ -66,12 +86,12 @@ cd "${gmp_directory}/build"
 rm --force --recursive ./*
 
 ../configure \
-	--host="${CROSS_COMPILE_TRIPLET}" \
 	--prefix="${toolchain_directory}" \
 	--enable-shared \
 	--enable-static \
-	CFLAGS="${optflags}" \
-	CXXFLAGS="${optflags}" \
+	${cross_compile_flags} \
+	CFLAGS="${cflags}" \
+	CXXFLAGS="${cflags}" \
 	LDFLAGS="${linkflags}"
 
 make all --jobs
@@ -83,13 +103,13 @@ cd "${mpfr_directory}/build"
 rm --force --recursive ./*
 
 ../configure \
-	--host="${CROSS_COMPILE_TRIPLET}" \
 	--prefix="${toolchain_directory}" \
 	--with-gmp="${toolchain_directory}" \
 	--enable-shared \
 	--enable-static \
-	CFLAGS="${optflags}" \
-	CXXFLAGS="${optflags}" \
+	${cross_compile_flags} \
+	CFLAGS="${cflags}" \
+	CXXFLAGS="${cflags}" \
 	LDFLAGS="${linkflags}"
 
 make all --jobs
@@ -101,13 +121,13 @@ cd "${mpc_directory}/build"
 rm --force --recursive ./*
 
 ../configure \
-	--host="${CROSS_COMPILE_TRIPLET}" \
 	--prefix="${toolchain_directory}" \
 	--with-gmp="${toolchain_directory}" \
 	--enable-shared \
 	--enable-static \
-	CFLAGS="${optflags}" \
-	CXXFLAGS="${optflags}" \
+	${cross_compile_flags} \
+	CFLAGS="${cflags}" \
+	CXXFLAGS="${cflags}" \
 	LDFLAGS="${linkflags}"
 
 make all --jobs
@@ -118,22 +138,22 @@ sed -i 's/#include <stdint.h>/#include <stdint.h>\n#include <stdio.h>/g' "${tool
 [ -d "${binutils_directory}/build" ] || mkdir "${binutils_directory}/build"
 
 declare -r targets=(
-	'amd64'
 	'i386'
+	'amd64'
 )
 
 for target in "${targets[@]}"; do
 	case "${target}" in
 		amd64)
-			declare triple='x86_64-unknown-haiku';;
+			declare triplet='x86_64-unknown-haiku';;
 		i386)
-			declare triple='i586-unknown-haiku';;
+			declare triplet='i586-unknown-haiku';;
 	esac
 	
-	declare sysroot_tarball="/tmp/${triple}.tar.xz"
-	declare sysroot_directory="/tmp/${triple}"
+	declare sysroot_tarball="/tmp/${triplet}.tar.xz"
+	declare sysroot_directory="/tmp/${triplet}"
 	
-	wget "https://github.com/AmanoTeam/haiku-sysroot/releases/download/0.1/${triple}.tar.xz" --output-document="${sysroot_tarball}"
+	wget "https://github.com/AmanoTeam/haiku-sysroot/releases/download/0.1/${triplet}.tar.xz" --output-document="${sysroot_tarball}"
 	
 	tar --directory="$(dirname "${sysroot_directory}")" --extract --file="${sysroot_tarball}"
 	
@@ -141,16 +161,16 @@ for target in "${targets[@]}"; do
 	rm --force --recursive ./*
 	
 	../configure \
-		--host="${CROSS_COMPILE_TRIPLET}" \
-		--target="${triple}" \
+		--target="${triplet}" \
 		--prefix="${toolchain_directory}" \
 		--enable-gold \
 		--enable-ld \
 		--enable-lto \
 		--disable-gprofng \
 		--with-static-standard-libraries \
-		CFLAGS="${optflags}" \
-		CXXFLAGS="${optflags}" \
+		${cross_compile_flags} \
+		CFLAGS="${cflags}" \
+		CXXFLAGS="${cflags}" \
 		LDFLAGS="${linkflags}"
 	
 	make all --jobs="${max_jobs}"
@@ -158,50 +178,50 @@ for target in "${targets[@]}"; do
 	
 	declare cinclude_flags="$(
 		cat <<- flags | tr '\n' ' '
-			-I${toolchain_directory}/${triple}/include/os
-			-I${toolchain_directory}/${triple}/include/os/app
-			-I${toolchain_directory}/${triple}/include/os/device
-			-I${toolchain_directory}/${triple}/include/os/drivers
-			-I${toolchain_directory}/${triple}/include/os/game
-			-I${toolchain_directory}/${triple}/include/os/interface
-			-I${toolchain_directory}/${triple}/include/os/kernel
-			-I${toolchain_directory}/${triple}/include/os/locale
-			-I${toolchain_directory}/${triple}/include/os/mail
-			-I${toolchain_directory}/${triple}/include/os/media
-			-I${toolchain_directory}/${triple}/include/os/midi
-			-I${toolchain_directory}/${triple}/include/os/midi2
-			-I${toolchain_directory}/${triple}/include/os/net
-			-I${toolchain_directory}/${triple}/include/os/opengl
-			-I${toolchain_directory}/${triple}/include/os/storage
-			-I${toolchain_directory}/${triple}/include/os/support
-			-I${toolchain_directory}/${triple}/include/os/translation
-			-I${toolchain_directory}/${triple}/include/os/add-ons/graphics
-			-I${toolchain_directory}/${triple}/include/os/add-ons/input_server
-			-I${toolchain_directory}/${triple}/include/os/add-ons/mail_daemon
-			-I${toolchain_directory}/${triple}/include/os/add-ons/registrar
-			-I${toolchain_directory}/${triple}/include/os/add-ons/screen_saver
-			-I${toolchain_directory}/${triple}/include/os/add-ons/tracker
-			-I${toolchain_directory}/${triple}/include/os/be_apps/Deskbar
-			-I${toolchain_directory}/${triple}/include/os/be_apps/NetPositive
-			-I${toolchain_directory}/${triple}/include/os/be_apps/Tracker
-			-I${toolchain_directory}/${triple}/include/3rdparty
-			-I${toolchain_directory}/${triple}/include/bsd
-			-I${toolchain_directory}/${triple}/include/glibc
-			-I${toolchain_directory}/${triple}/include/gnu
-			-I${toolchain_directory}/${triple}/include/posix
-			-I${toolchain_directory}/${triple}/include
+			-I${toolchain_directory}/${triplet}/include/os
+			-I${toolchain_directory}/${triplet}/include/os/app
+			-I${toolchain_directory}/${triplet}/include/os/device
+			-I${toolchain_directory}/${triplet}/include/os/drivers
+			-I${toolchain_directory}/${triplet}/include/os/game
+			-I${toolchain_directory}/${triplet}/include/os/interface
+			-I${toolchain_directory}/${triplet}/include/os/kernel
+			-I${toolchain_directory}/${triplet}/include/os/locale
+			-I${toolchain_directory}/${triplet}/include/os/mail
+			-I${toolchain_directory}/${triplet}/include/os/media
+			-I${toolchain_directory}/${triplet}/include/os/midi
+			-I${toolchain_directory}/${triplet}/include/os/midi2
+			-I${toolchain_directory}/${triplet}/include/os/net
+			-I${toolchain_directory}/${triplet}/include/os/opengl
+			-I${toolchain_directory}/${triplet}/include/os/storage
+			-I${toolchain_directory}/${triplet}/include/os/support
+			-I${toolchain_directory}/${triplet}/include/os/translation
+			-I${toolchain_directory}/${triplet}/include/os/add-ons/graphics
+			-I${toolchain_directory}/${triplet}/include/os/add-ons/input_server
+			-I${toolchain_directory}/${triplet}/include/os/add-ons/mail_daemon
+			-I${toolchain_directory}/${triplet}/include/os/add-ons/registrar
+			-I${toolchain_directory}/${triplet}/include/os/add-ons/screen_saver
+			-I${toolchain_directory}/${triplet}/include/os/add-ons/tracker
+			-I${toolchain_directory}/${triplet}/include/os/be_apps/Deskbar
+			-I${toolchain_directory}/${triplet}/include/os/be_apps/NetPositive
+			-I${toolchain_directory}/${triplet}/include/os/be_apps/Tracker
+			-I${toolchain_directory}/${triplet}/include/3rdparty
+			-I${toolchain_directory}/${triplet}/include/bsd
+			-I${toolchain_directory}/${triplet}/include/glibc
+			-I${toolchain_directory}/${triplet}/include/gnu
+			-I${toolchain_directory}/${triplet}/include/posix
+			-I${toolchain_directory}/${triplet}/include
 		flags
 	)"
 	
-	[ -d "${toolchain_directory}/${triple}/include" ] || mkdir "${toolchain_directory}/${triple}/include"
-	[ -d "${toolchain_directory}/${triple}/lib" ] || mkdir "${toolchain_directory}/${triple}/lib"
+	[ -d "${toolchain_directory}/${triplet}/include" ] || mkdir "${toolchain_directory}/${triplet}/include"
+	[ -d "${toolchain_directory}/${triplet}/lib" ] || mkdir "${toolchain_directory}/${triplet}/lib"
 	
-	cp --no-dereference "${sysroot_directory}/system/lib/"* "${toolchain_directory}/${triple}/lib"
+	cp --no-dereference "${sysroot_directory}/system/lib/"* "${toolchain_directory}/${triplet}/lib"
 	
 	while read filename; do
 		declare name="$(basename "${filename}")"
 		
-		declare target="${toolchain_directory}/${triple}/lib/${name}"
+		declare target="${toolchain_directory}/${triplet}/lib/${name}"
 		
 		if [ -f "${target}" ]; then
 			continue
@@ -210,21 +230,28 @@ for target in "${targets[@]}"; do
 		cp --no-dereference "${filename}" "${target}"
 	done <<< "$(ls "${sysroot_directory}/system/develop/lib/"*)"
 	
-	cp --no-dereference --recursive "${sysroot_directory}/system/develop/headers/"* "${toolchain_directory}/${triple}/include"
+	cp --no-dereference --recursive "${sysroot_directory}/system/develop/headers/"* "${toolchain_directory}/${triplet}/include"
+	
+	sed -i 's/__GNUC__ <= 12/__GNUC__ <= 13/g' "${toolchain_directory}/${triplet}/include/os/BeBuild.h"
 	
 	cd "${gcc_directory}/build"
 	
 	rm --force --recursive ./*
 	
 	../configure \
-		--host="${CROSS_COMPILE_TRIPLET}" \
-		--target="${triple}" \
+		--target="${triplet}" \
 		--prefix="${toolchain_directory}" \
 		--with-linker-hash-style='sysv' \
 		--with-gmp="${toolchain_directory}" \
 		--with-mpc="${toolchain_directory}" \
 		--with-mpfr="${toolchain_directory}" \
 		--with-bugurl='https://github.com/AmanoTeam/Sil/issues' \
+		--with-gcc-major-version-only \
+		--with-pkgversion="Sil v0.4-${revision}" \
+		--with-sysroot="${toolchain_directory}/${triplet}" \
+		--with-native-system-header-dir='/include' \
+		--with-default-libstdcxx-abi='gcc4-compatible' \
+		--includedir="${toolchain_directory}/${triplet}/include" \
 		--enable-__cxa_atexit \
 		--enable-cet='auto' \
 		--enable-checking='release' \
@@ -235,47 +262,43 @@ for target in "${targets[@]}"; do
 		--enable-link-serialization='1' \
 		--enable-linker-build-id \
 		--enable-lto \
-		--disable-multilib \
 		--enable-plugin \
 		--enable-shared \
 		--enable-threads='posix' \
 		--enable-libssp \
-		--disable-libstdcxx-pch \
-		--disable-werror \
 		--enable-languages='c,c++' \
+		--enable-ld \
+		--enable-gold \
+		--enable-frame-pointer \
 		--disable-bootstrap \
 		--disable-libatomic \
 		--disable-libgomp \
-		--without-headers \
-		--enable-ld \
-		--enable-gold \
-		--with-gcc-major-version-only \
-		--with-pkgversion="Sil v0.3-${revision}" \
-		--with-sysroot="${toolchain_directory}/${triple}" \
-		--with-native-system-header-dir='/include' \
+		--disable-libstdcxx-pch \
+		--disable-werror \
+		--disable-multilib \
 		--disable-nls \
-		--with-default-libstdcxx-abi='gcc4-compatible' \
-		--enable-frame-pointer \
-		CFLAGS="${optflags}" \
-		CXXFLAGS="${optflags}" \
+		--without-headers \
+		${cross_compile_flags} \
+		CFLAGS="${cflags}" \
+		CXXFLAGS="${cflags}" \
 		LDFLAGS="-Wl,-rpath-link,${OBGGCC_TOOLCHAIN}/${CROSS_COMPILE_TRIPLET}/lib"
 	
 	LD_LIBRARY_PATH="${toolchain_directory}/lib" PATH="${PATH}:${toolchain_directory}/bin" make \
-		CFLAGS_FOR_TARGET="${optflags} ${linkflags} ${cinclude_flags}" \
-		CXXFLAGS_FOR_TARGET="${optflags} ${linkflags} ${cinclude_flags}" \
+		CFLAGS_FOR_TARGET="${cflags} ${linkflags} ${cinclude_flags}" \
+		CXXFLAGS_FOR_TARGET="${cflags} ${linkflags} ${cinclude_flags}" \
 		all --jobs="${max_jobs}"
 	make install
 	
-	cd "${toolchain_directory}/${triple}/bin"
+	cd "${toolchain_directory}/${triplet}/bin"
 	
 	for name in *; do
 		rm "${name}"
-		ln -s "../../bin/${triple}-${name}" "${name}"
+		ln -s "../../bin/${triplet}-${name}" "${name}"
 	done
 	
 	rm --recursive "${toolchain_directory}/share"
 	
-	patchelf --add-rpath '$ORIGIN/../../../../lib' "${toolchain_directory}/libexec/gcc/${triple}/11/cc1"
-	patchelf --add-rpath '$ORIGIN/../../../../lib' "${toolchain_directory}/libexec/gcc/${triple}/11/cc1plus"
-	patchelf --add-rpath '$ORIGIN/../../../../lib' "${toolchain_directory}/libexec/gcc/${triple}/11/lto1"
+	patchelf --add-rpath '$ORIGIN/../../../../lib' "${toolchain_directory}/libexec/gcc/${triplet}/"*"/cc1"
+	patchelf --add-rpath '$ORIGIN/../../../../lib' "${toolchain_directory}/libexec/gcc/${triplet}/"*"/cc1plus"
+	patchelf --add-rpath '$ORIGIN/../../../../lib' "${toolchain_directory}/libexec/gcc/${triplet}/"*"/lto1"
 done
