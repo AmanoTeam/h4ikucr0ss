@@ -17,7 +17,7 @@ declare -r binutils_tarball='/tmp/binutils.tar.xz'
 declare -r binutils_directory='/tmp/binutils-2.40'
 
 declare -r gcc_tarball='/tmp/gcc.tar.xz'
-declare -r gcc_directory='/tmp/gcc-13.1.0'
+declare -r gcc_directory='/tmp/gcc-13.2.0'
 
 declare -r cflags='-Wno-builtin-declaration-mismatch -Wno-strict-prototypes -Os'
 declare -r linkflags='-Wl,-s'
@@ -67,11 +67,11 @@ if ! [ -f "${binutils_tarball}" ]; then
 fi
 
 if ! [ -f "${gcc_tarball}" ]; then
-	wget --no-verbose 'https://ftp.gnu.org/gnu/gcc/gcc-13.1.0/gcc-13.1.0.tar.xz' --output-document="${gcc_tarball}"
+	wget --no-verbose 'https://ftp.gnu.org/gnu/gcc/gcc-13.2.0/gcc-13.2.0.tar.xz' --output-document="${gcc_tarball}"
 	tar --directory="$(dirname "${gcc_directory}")" --extract --file="${gcc_tarball}"
 fi
 
-patch --input="$(realpath './patches/gcc-13.1.0.patch')" --strip=1 --directory="${gcc_directory}"
+patch --input="$(realpath './patches/gcc-13.2.0.patch')" --strip=1 --directory="${gcc_directory}"
 patch --input="$(realpath './patches/no_hardcoded_paths.patch')" --strip=1 --directory="${gcc_directory}"
 
 sed -i 's/#ifdef _GLIBCXX_HAVE_SYS_SDT_H/#ifdef _GLIBCXX_HAVE_SYS_SDT_HHH/g' "${gcc_directory}/libstdc++-v3/libsupc++/unwind-cxx.h"
@@ -168,6 +168,7 @@ for target in "${targets[@]}"; do
 		--enable-lto \
 		--disable-gprofng \
 		--with-static-standard-libraries \
+		--with-sysroot="${toolchain_directory}/${triplet}" \
 		${cross_compile_flags} \
 		CFLAGS="${cflags}" \
 		CXXFLAGS="${cflags}" \
@@ -220,7 +221,6 @@ for target in "${targets[@]}"; do
 	
 	while read filename; do
 		declare name="$(basename "${filename}")"
-		
 		declare target="${toolchain_directory}/${triplet}/lib/${name}"
 		
 		if [ -f "${target}" ]; then
@@ -247,7 +247,7 @@ for target in "${targets[@]}"; do
 		--with-mpfr="${toolchain_directory}" \
 		--with-bugurl='https://github.com/AmanoTeam/Sil/issues' \
 		--with-gcc-major-version-only \
-		--with-pkgversion="Sil v0.4-${revision}" \
+		--with-pkgversion="Sil v0.5-${revision}" \
 		--with-sysroot="${toolchain_directory}/${triplet}" \
 		--with-native-system-header-dir='/include' \
 		--with-default-libstdcxx-abi='gcc4-compatible' \
